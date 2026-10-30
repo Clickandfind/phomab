@@ -86,9 +86,9 @@ create policy "Bid parties can view bids" on public.service_bids for select to a
 drop policy if exists "Customers create bids" on public.service_bids;
 create policy "Customers create bids" on public.service_bids for insert to authenticated with check (customer_id=auth.uid());
 drop policy if exists "Bid parties update bids" on public.service_bids;
-create policy "Bid parties update bids" on public.service_bids for update to authenticated
- using (customer_id=auth.uid() or exists(select 1 from public.service_providers s where s.id=service_provider_id and s.owner_id=auth.uid()))
- with check (customer_id=auth.uid() or exists(select 1 from public.service_providers s where s.id=service_provider_id and s.owner_id=auth.uid()));
+create policy "Service owners decide customer bids" on public.service_bids for update to authenticated
+ using (exists(select 1 from public.service_providers s where s.id=service_provider_id and s.owner_id=auth.uid()))
+ with check (exists(select 1 from public.service_providers s where s.id=service_provider_id and s.owner_id=auth.uid()));
 
 -- Rides: passengers propose fares; drivers respond with counter-offers.
 create table if not exists public.ride_requests (
@@ -109,7 +109,9 @@ create table if not exists public.ride_requests (
 );
 alter table public.ride_requests enable row level security;
 drop policy if exists "Passengers and drivers view open rides" on public.ride_requests;
-create policy "Passengers and drivers view open rides" on public.ride_requests for select to authenticated using (passenger_id=auth.uid() or status='open');
+create policy "Passengers and registered drivers view rides" on public.ride_requests for select to authenticated using (
+ passenger_id=auth.uid() or (status='open' and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver'))
+);
 drop policy if exists "Passengers create rides" on public.ride_requests;
 create policy "Passengers create rides" on public.ride_requests for insert to authenticated with check (passenger_id=auth.uid());
 drop policy if exists "Passengers update own rides" on public.ride_requests;
@@ -133,13 +135,15 @@ drop policy if exists "Ride parties view offers" on public.ride_offers;
 create policy "Ride parties view offers" on public.ride_offers for select to authenticated
  using (driver_id=auth.uid() or exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()));
 drop policy if exists "Drivers create own offers" on public.ride_offers;
-create policy "Drivers create offers for open rides" on public.ride_offers for insert to authenticated with check (
- driver_id=auth.uid() and exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.status='open' and r.passenger_id<>auth.uid() and (r.vehicle_type='any' or (r.vehicle_type='private_car' and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver')) or (r.vehicle_type='registered_taxi' and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver'))))
+create policy "Registered drivers create offers for open rides" on public.ride_offers for insert to authenticated with check (
+ driver_id=auth.uid()
+ and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver')
+ and exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.status='open' and r.passenger_id<>auth.uid())
 );
 drop policy if exists "Ride parties update offers" on public.ride_offers;
-create policy "Ride parties update offers" on public.ride_offers for update to authenticated
- using (driver_id=auth.uid() or exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()))
- with check (driver_id=auth.uid() or exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()));
+create policy "Passengers decide driver offers" on public.ride_offers for update to authenticated
+ using (exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()))
+ with check (exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()));
 
 -- AGREE: private conversations and messages between matched/engaged users.
 create table if not exists public.conversations (
