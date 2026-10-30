@@ -29,6 +29,9 @@ create table if not exists public.service_providers (
  created_at timestamptz not null default now()
 );
 
+alter table public.jobs add column if not exists share_phone boolean not null default false;
+alter table public.service_providers add column if not exists share_phone boolean not null default false;
+
 alter table public.listings enable row level security;
 alter table public.jobs enable row level security;
 alter table public.service_providers enable row level security;
