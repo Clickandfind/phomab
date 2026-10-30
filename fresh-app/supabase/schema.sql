@@ -83,3 +83,19 @@ create or replace view public.public_service_providers as
 revoke all on public.listings, public.jobs, public.service_providers from anon;
 grant select on public.public_listings, public.public_jobs, public.public_service_providers to anon, authenticated;
 grant insert, update, delete on public.listings, public.jobs, public.service_providers to authenticated;
+
+-- Public rental photos. Each signed-in user may upload only into their own folder.
+insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
+values ('rental-photos','rental-photos',true,5242880,array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public=true,file_size_limit=5242880,allowed_mime_types=array['image/jpeg','image/png','image/webp'];
+
+drop policy if exists "Anyone can view rental photos" on storage.objects;
+create policy "Anyone can view rental photos" on storage.objects for select using(bucket_id='rental-photos');
+drop policy if exists "Users upload own rental photos" on storage.objects;
+create policy "Users upload own rental photos" on storage.objects for insert to authenticated with check(bucket_id='rental-photos' and (storage.foldername(name))[1]=auth.uid()::text);
+drop policy if exists "Users update own rental photos" on storage.objects;
+create policy "Users update own rental photos" on storage.objects for update to authenticated using(bucket_id='rental-photos' and (storage.foldername(name))[1]=auth.uid()::text) with check(bucket_id='rental-photos' and (storage.foldername(name))[1]=auth.uid()::text);
+drop policy if exists "Users delete own rental photos" on storage.objects;
+create policy "Users delete own rental photos" on storage.objects for delete to authenticated using(bucket_id='rental-photos' and (storage.foldername(name))[1]=auth.uid()::text);
+
+grant select on public.listings, public.jobs, public.service_providers to authenticated;
