@@ -15,7 +15,8 @@ create table if not exists public.profiles (
 );
 alter table public.profiles enable row level security;
 drop policy if exists "Profiles visible to signed in users" on public.profiles;
-create policy "Profiles visible to signed in users" on public.profiles for select to authenticated using (true);
+drop policy if exists "Users view own profile" on public.profiles;
+create policy "Users view own profile" on public.profiles for select to authenticated using (user_id=auth.uid());
 drop policy if exists "Users create own profile" on public.profiles;
 create policy "Users create own profile" on public.profiles for insert to authenticated with check (user_id=auth.uid());
 drop policy if exists "Users update own profile" on public.profiles;
@@ -132,7 +133,9 @@ drop policy if exists "Ride parties view offers" on public.ride_offers;
 create policy "Ride parties view offers" on public.ride_offers for select to authenticated
  using (driver_id=auth.uid() or exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()));
 drop policy if exists "Drivers create own offers" on public.ride_offers;
-create policy "Drivers create own offers" on public.ride_offers for insert to authenticated with check (driver_id=auth.uid());
+create policy "Drivers create offers for open rides" on public.ride_offers for insert to authenticated with check (
+ driver_id=auth.uid() and exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.status='open' and r.passenger_id<>auth.uid() and (r.vehicle_type='any' or (r.vehicle_type='private_car' and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver')) or (r.vehicle_type='registered_taxi' and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver'))))
+);
 drop policy if exists "Ride parties update offers" on public.ride_offers;
 create policy "Ride parties update offers" on public.ride_offers for update to authenticated
  using (driver_id=auth.uid() or exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()))
@@ -159,7 +162,7 @@ create policy "Participants view conversations" on public.conversations for sele
  using (auth.uid() in (participant_one,participant_two));
 drop policy if exists "Participants create conversations" on public.conversations;
 create policy "Participants create conversations" on public.conversations for insert to authenticated
- with check (auth.uid() in (participant_one,participant_two));
+ with check (auth.uid() in (participant_one,participant_two) and participant_one<>participant_two and (ask_id is null or exists(select 1 from public.asks a where a.id=ask_id and a.user_id=auth.uid())));
 create table if not exists public.messages (
  id uuid primary key default gen_random_uuid(),
  conversation_id uuid not null references public.conversations(id) on delete cascade,
@@ -192,9 +195,15 @@ create table if not exists public.call_sessions (
 );
 alter table public.call_sessions enable row level security;
 drop policy if exists "Call participants access sessions" on public.call_sessions;
-create policy "Call participants access sessions" on public.call_sessions for all to authenticated
- using (auth.uid() in (caller_id,callee_id))
- with check (auth.uid() in (caller_id,callee_id));
+drop policy if exists "Participants read call sessions" on public.call_sessions;
+drop policy if exists "Caller starts call sessions" on public.call_sessions;
+drop policy if exists "Participants update call sessions" on public.call_sessions;
+create policy "Participants read call sessions" on public.call_sessions for select to authenticated
+ using (auth.uid() in (caller_id,callee_id) and exists(select 1 from public.conversations c where c.id=conversation_id and auth.uid() in (c.participant_one,c.participant_two)));
+create policy "Caller starts call sessions" on public.call_sessions for insert to authenticated
+ with check (caller_id=auth.uid() and exists(select 1 from public.conversations c where c.id=conversation_id and auth.uid() in (c.participant_one,c.participant_two) and callee_id in (c.participant_one,c.participant_two)));
+create policy "Participants update call sessions" on public.call_sessions for update to authenticated
+ using (auth.uid() in (caller_id,callee_id)) with check (auth.uid() in (caller_id,callee_id));
 
 -- Verification is an application review workflow; no identity documents are stored by this migration.
 create table if not exists public.verification_requests (
