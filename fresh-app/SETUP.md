@@ -1,6 +1,6 @@
-# PHOMAB fresh app — setup and test guide
+# PMB PMB app — setup and test guide
 
-This guide applies only to `fresh-app/`. The original PHOMAB website and deployment remain untouched.
+This guide applies only to `fresh-app/`. The original PMB website and deployment remain untouched.
 
 ## Included in this build
 
@@ -37,7 +37,7 @@ Ride offers require a profile with `account_type='driver'`. Do not assign driver
 
 ## 4. Separate deployment
 
-Deploy only the contents of `fresh-app/` as a separate static site. Do not replace the repository-root `index.html`, change the original PHOMAB website, alter Cloudflare/Firebase settings, or deploy over the old site. Entry point: `index.html`.
+Deploy only the contents of `fresh-app/` as a separate static site. Do not replace the repository-root `index.html`, change the original PMB website, alter Cloudflare/Firebase settings, or deploy over the old site. Entry point: `index.html`.
 
 ## 5. Required tests
 
