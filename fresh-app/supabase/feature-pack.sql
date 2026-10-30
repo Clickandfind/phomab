@@ -112,7 +112,7 @@ alter table public.ride_requests enable row level security;
 drop policy if exists "Passengers and drivers view open rides" on public.ride_requests;
 drop policy if exists "Passengers and registered drivers view rides" on public.ride_requests;
 create policy "Passengers and registered drivers view rides" on public.ride_requests for select to authenticated using (
- passenger_id=auth.uid() or (status='open' and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver'))
+ passenger_id=auth.uid() or (status='open' and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver' and p.verified_at is not null))
 );
 drop policy if exists "Passengers create rides" on public.ride_requests;
 create policy "Passengers create rides" on public.ride_requests for insert to authenticated with check (passenger_id=auth.uid());
