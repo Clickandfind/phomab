@@ -36,7 +36,7 @@ Use a test account and check each flow:
 ## Current implementation boundaries
 
 - This is the fresh PHOMAB build, isolated in this folder.
-- The app currently supports browsing, account registration/sign-in, and publishing rental, job and service posts.
+- The app currently supports browsing, account registration/sign-in, publishing rental, job and service posts, and a My Posts dashboard where account owners can mark their posts unavailable, republish them, or delete them.
 - Rental photo upload is limited to image files up to 20 MB.
 - Do not call the app production-ready until the SQL setup has run and the tests above pass.
 - Moderation, reporting, richer profiles, and the complete Ask / Match / Agree interaction flow still need implementation and testing.
