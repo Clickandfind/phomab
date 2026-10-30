@@ -133,7 +133,7 @@ db.auth.onAuthStateChange((_event,s)=>{session=s;authUI();});refreshSession();
    db.from('conversations').select('id,ask_id,participant_one,participant_two,created_at').or('participant_one.eq.'+session.user.id+',participant_two.eq.'+session.user.id).order('created_at',{ascending:false}).limit(30)
   ]);
   let html='';
-  if(!bids.error) (bids.data||[]).forEach(x=>html+='<article class="feature-item"><strong>Service offer · '+safe(x.service_providers?.name||'Provider')+'</strong><div class="meta">'+safe(x.service_providers?.service_category||'')+' · '+safe(x.currency)+' '+safe(x.offer_amount)+' · '+safe(x.status)+'</div><p>'+safe(x.message||'No message attached')+'</p>'+ (x.customer_id===session.user.id&&x.status==='pending'?'<div class="actions"><button type="button" class="soft" data-offer-table="service_bids" data-offer-id="'+safe(x.id)+'" data-offer-status="accepted">Accept</button><button type="button" class="soft" data-offer-table="service_bids" data-offer-id="'+safe(x.id)+'" data-offer-status="rejected">Decline</button></div>':'')+'</article>');
+  if(!bids.error) (bids.data||[]).forEach(x=>html+='<article class="feature-item"><strong>Service offer · '+safe(x.service_providers?.name||'Provider')+'</strong><div class="meta">'+safe(x.service_providers?.service_category||'')+' · '+safe(x.currency)+' '+safe(x.offer_amount)+' · '+safe(x.status)+'</div><p>'+safe(x.message||'No message attached')+'</p>'+ ''+'</article>');
   if(!bids.error){const own=await db.from('service_bids').select('id,service_provider_id,customer_id,offer_amount,currency,message,status,service_providers(name,service_category,owner_id)').in('service_provider_id',(await db.from('service_providers').select('id').eq('owner_id',session.user.id)).data?.map(p=>p.id)||[]);(own.data||[]).forEach(x=>html+='<article class="feature-item"><strong>Bid received · '+safe(x.service_providers?.name||'Your service')+'</strong><div class="meta">'+safe(x.currency)+' '+safe(x.offer_amount)+' · '+safe(x.status)+'</div><p>'+safe(x.message||'')+'</p>'+(x.status==='pending'?'<div class="actions"><button class="soft" data-offer-table="service_bids" data-offer-id="'+safe(x.id)+'" data-offer-status="accepted">Accept</button><button class="soft" data-offer-table="service_bids" data-offer-id="'+safe(x.id)+'" data-offer-status="rejected">Decline</button></div>':'')+'</article>');}
   if(!rides.error)(rides.data||[]).forEach(x=>html+='<article class="feature-item"><strong>Ride offer</strong><div class="meta">'+safe(x.ride_requests?.pickup_text)+' → '+safe(x.ride_requests?.destination_text)+'</div><div>'+safe(x.offered_fare)+' USD · '+safe(x.status)+'</div><p>'+safe(x.message||'')+'</p>'+(x.ride_requests?.passenger_id===session.user.id&&x.status==='pending'?'<div class="actions"><button class="soft" data-offer-table="ride_offers" data-offer-id="'+safe(x.id)+'" data-offer-status="accepted">Accept</button><button class="soft" data-offer-table="ride_offers" data-offer-id="'+safe(x.id)+'" data-offer-status="rejected">Decline</button></div>':'')+'</article>');
   const ownRides=await db.from('ride_requests').select('id').eq('passenger_id',session.user.id);
@@ -149,8 +149,28 @@ db.auth.onAuthStateChange((_event,s)=>{session=s;authUI();});refreshSession();
   out.querySelectorAll('.openChat').forEach(btn=>btn.onclick=()=>openChat(btn.dataset.conversation));
  }
  async function updateOffer(btn){
-  btn.disabled=true;const {error}=await db.from(btn.dataset.offerTable).update({status:btn.dataset.offerStatus}).eq('id',btn.dataset.offerId);
+  btn.disabled=true;
+  const table=btn.dataset.offerTable,id=btn.dataset.offerId,status=btn.dataset.offerStatus;
+  let context=null;
+  if(table==='service_bids'){
+   const {data}=await db.from('service_bids').select('id,customer_id,service_provider_id,service_providers(owner_id)').eq('id',id).single();
+   if(data)context={participant_one:data.customer_id,participant_two:data.service_providers?.owner_id,service_provider_id:data.service_provider_id};
+  }else{
+   const {data}=await db.from('ride_offers').select('id,driver_id,ride_request_id,ride_requests(passenger_id)').eq('id',id).single();
+   if(data)context={participant_one:data.driver_id,participant_two:data.ride_requests?.passenger_id,ride_request_id:data.ride_request_id};
+  }
+  const {error}=await db.from(table).update({status}).eq('id',id);
   if(error){alert('Could not update offer: '+error.message);btn.disabled=false;return;}
+  if(status==='accepted'&&context?.participant_one&&context?.participant_two&&context.participant_one!==context.participant_two){
+   const {data:existing}=await db.from('conversations').select('id').or('and(participant_one.eq.'+context.participant_one+',participant_two.eq.'+context.participant_two+'),and(participant_one.eq.'+context.participant_two+',participant_two.eq.'+context.participant_one+')').limit(1);
+   let conversationId=existing?.[0]?.id;
+   if(!conversationId){
+    const payload={participant_one:context.participant_one,participant_two:context.participant_two,...(context.service_provider_id?{service_provider_id:context.service_provider_id}:{}),...(context.ride_request_id?{ride_request_id:context.ride_request_id}:{})};
+    const created=await db.from('conversations').insert(payload).select('id').single();
+    if(!created.error)conversationId=created.data.id;
+   }
+   if(conversationId){await loadAgree();await openChat(conversationId);return;}
+  }
   await loadAgree();
  }
  async function openChat(id){
