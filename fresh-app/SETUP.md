@@ -1,42 +1,70 @@
-# PHOMAB fresh app — setup guide
+# PHOMAB fresh app — setup and test guide
 
-This guide applies only to `fresh-app/`. It does not change the original PHOMAB website.
+This guide applies only to `fresh-app/`. The original PHOMAB website and deployment remain untouched.
 
-## 1. Create the database
+## Included in this build
 
-1. Open the Supabase project used by the fresh app.
-2. Open **SQL Editor** and create a new query.
-3. Open [supabase/schema.sql](./supabase/schema.sql), copy the entire file, paste it into the SQL Editor and run it.
-4. Confirm the query completes without errors. The script creates the rentals, jobs and service-provider tables, safe public views, and the rental photo bucket/policies.\n5. After `schema.sql` succeeds, run the entire [supabase/feature-pack.sql](./supabase/feature-pack.sql) script in a second SQL Editor query. This adds the database foundation for Ask requests, matches, ride requests and driver fare offers, service bids, private conversations/messages, call signalling sessions, language preferences and verification requests.
+- Rental, job and service browsing, publishing and owner-only post management.
+- Rental photo upload (image files up to 20 MB).
+- Consent-controlled phone visibility and WhatsApp contact.
+- Voice search where supported by the browser.
+- ASK requests in English, Shona or Ndebele.
+- Basic keyword, location and budget ranking for rental, job and service matches, with save-match actions.
+- Passenger ride requests, a driver board, driver fare offers and passenger accept/decline.
+- Service offers, AGREE offer review and private messages.
+- Accepted service and ride offers attempt to create a conversation.
 
-If Supabase reports a permission error involving the `storage` schema or `storage.buckets`, stop and check that you are running the script as the project owner in the Supabase SQL Editor.
+Matching is rule-based, not AI semantic matching. Selecting a language saves the request language; it does not translate the whole interface.
 
-## 2. Configure sign-in
+## 1. Database setup (required)
 
-In Supabase, open **Authentication → URL Configuration** and add the eventual deployed app URL to the allowed Site URL / Redirect URLs. For local preview, use the local preview URL shown by your preview host. Keep email confirmation enabled for real users.
+Open the Supabase SQL Editor for the project configured in `index.html`.
 
-## 3. Deploy the fresh app
+1. Run all of `supabase/schema.sql`.
+2. Confirm it completes without errors.
+3. Run all of `supabase/feature-pack.sql` in a second query.
+4. Confirm it completes without errors.
 
-Deploy the contents of this folder as a separate static site. Do not change the root `index.html`, root README, Cloudflare project, Firebase setup, or the original `Clickandfind/clickandfind.github.io` repository.
+The scripts are committed to GitHub but have not been executed against your Supabase project from this session. Do not assume the database is ready until both scripts succeed.
 
-The entry page is `index.html`. It uses the Supabase browser client and the publishable key already configured in that file. Never put a Supabase service-role key in browser code.
+## 2. Authentication
 
-## 4. Test before inviting users
+In Supabase, open Authentication → URL Configuration. Add the exact deployed fresh-app URL to Site URL and Redirect URLs. Keep email confirmation enabled for real users. Never place a service-role key in browser code; the app uses the publishable key.
 
-Use a test account and check each flow:
+## 3. Driver access
 
-- Create an account, confirm the email if required, then sign in.
-- Publish a rental with a photo and test the listing appears in rental search.
-- Publish a job and a service-provider profile and test both search categories.
-- Test contact visibility with phone-sharing unchecked and checked.
-- Test WhatsApp only when the owner explicitly enables it.
-- Test that one account cannot edit or delete another account's posts.
-- Test on Android Chrome and a desktop browser.
+Ride offers require a profile with `account_type='driver'`. Do not assign driver access without checking applicable local licensing, insurance and vehicle requirements. The app does not yet provide a complete trusted driver-verification/admin workflow; a driver label is not proof of registration.
 
-## Current implementation boundaries
+## 4. Separate deployment
 
-- This is the fresh PHOMAB build, isolated in this folder.
-- The app currently supports browsing, account registration/sign-in, publishing rental, job and service posts, and a My Posts dashboard where account owners can mark their posts unavailable, republish them, or delete them.
-- Rental photo upload is limited to image files up to 20 MB.
-- Do not call the app production-ready until the SQL setup has run and the tests above pass.
-- `feature-pack.sql` adds database tables and access policies; the corresponding complete app screens and workflows still need to be connected and tested.\n- Voice recognition depends on browser support and microphone permission.\n- Video calls need a WebRTC client and live signalling/realtime configuration; the database table alone does not provide working calls.\n- Maps, live driver location, language switching/translations, verification review tools, notifications, moderation and reporting still need implementation and testing.\n- Do not treat this feature foundation as a production-ready marketplace or ride-hailing service.
+Deploy only the contents of `fresh-app/` as a separate static site. Do not replace the repository-root `index.html`, change the original PHOMAB website, alter Cloudflare/Firebase settings, or deploy over the old site. Entry point: `index.html`.
+
+## 5. Required tests
+
+Use at least two separate test accounts:
+
+- Register, confirm email if enabled, sign in and sign out.
+- Publish a rental, job and service profile; verify each appears in its browse category.
+- Test photo upload, including a file near 20 MB.
+- Confirm phone numbers stay hidden without publisher consent and WhatsApp appears only when enabled.
+- Confirm users cannot edit or delete another user's posts.
+- Submit rental, job and service Asks; run Find my matches and Save match.
+- Submit a ride request; verify an approved driver account sees it and can offer a fare.
+- Verify the passenger can review, accept or decline the offer.
+- Submit a service offer; verify the service owner can review and decide it.
+- Accept an offer and test the generated conversation and messages from both accounts.
+- Repeat on Android Chrome and desktop.
+
+Do not invite real users until these tests pass.
+
+## 6. Remaining work before production
+
+- Video calling: WebRTC media, TURN service, realtime signalling, permissions and call lifecycle UI. The call-session table alone does not provide video calls.
+- Live maps, route display, driver location sharing and trip tracking.
+- Full Shona/Ndebele interface translation and speech recognition testing.
+- Trusted driver verification/admin review, moderation, reporting, blocking and support.
+- Push/email notifications and realtime message/offer updates.
+- AI matching connected to live listing data; current ranking is keyword-based.
+- Security, privacy, abuse/rate-limit, backup and load testing.
+
+Do not describe this as a production-ready marketplace or ride service until these items are completed and the end-to-end tests pass.
