@@ -86,6 +86,7 @@ create policy "Bid parties can view bids" on public.service_bids for select to a
 drop policy if exists "Customers create bids" on public.service_bids;
 create policy "Customers create bids" on public.service_bids for insert to authenticated with check (customer_id=auth.uid());
 drop policy if exists "Bid parties update bids" on public.service_bids;
+drop policy if exists "Service owners decide customer bids" on public.service_bids;
 create policy "Service owners decide customer bids" on public.service_bids for update to authenticated
  using (exists(select 1 from public.service_providers s where s.id=service_provider_id and s.owner_id=auth.uid()))
  with check (exists(select 1 from public.service_providers s where s.id=service_provider_id and s.owner_id=auth.uid()));
@@ -109,6 +110,7 @@ create table if not exists public.ride_requests (
 );
 alter table public.ride_requests enable row level security;
 drop policy if exists "Passengers and drivers view open rides" on public.ride_requests;
+drop policy if exists "Passengers and registered drivers view rides" on public.ride_requests;
 create policy "Passengers and registered drivers view rides" on public.ride_requests for select to authenticated using (
  passenger_id=auth.uid() or (status='open' and exists(select 1 from public.profiles p where p.user_id=auth.uid() and p.account_type='driver'))
 );
@@ -117,8 +119,11 @@ create policy "Passengers create rides" on public.ride_requests for insert to au
 drop policy if exists "Passengers update own rides" on public.ride_requests;
 create policy "Passengers update own rides" on public.ride_requests for update to authenticated using (passenger_id=auth.uid()) with check (passenger_id=auth.uid());
 
-alter table public.matches
- add constraint matches_ride_request_fk foreign key (ride_request_id) references public.ride_requests(id) on delete cascade;
+do $ begin
+ if not exists(select 1 from pg_constraint where conname='matches_ride_request_fk' and conrelid='public.matches'::regclass) then
+  alter table public.matches add constraint matches_ride_request_fk foreign key (ride_request_id) references public.ride_requests(id) on delete cascade;
+ end if;
+end $;
 
 create table if not exists public.ride_offers (
  id uuid primary key default gen_random_uuid(),
@@ -141,6 +146,7 @@ create policy "Registered drivers create offers for open rides" on public.ride_o
  and exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.status='open' and r.passenger_id<>auth.uid())
 );
 drop policy if exists "Ride parties update offers" on public.ride_offers;
+drop policy if exists "Passengers decide driver offers" on public.ride_offers;
 create policy "Passengers decide driver offers" on public.ride_offers for update to authenticated
  using (exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()))
  with check (exists(select 1 from public.ride_requests r where r.id=ride_request_id and r.passenger_id=auth.uid()));
