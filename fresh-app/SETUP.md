@@ -7,7 +7,7 @@ This guide applies only to `fresh-app/`. It does not change the original PHOMAB 
 1. Open the Supabase project used by the fresh app.
 2. Open **SQL Editor** and create a new query.
 3. Open [supabase/schema.sql](./supabase/schema.sql), copy the entire file, paste it into the SQL Editor and run it.
-4. Confirm the query completes without errors. The script creates the rentals, jobs and service-provider tables, safe public views, and the rental photo bucket/policies.
+4. Confirm the query completes without errors. The script creates the rentals, jobs and service-provider tables, safe public views, and the rental photo bucket/policies.\n5. After `schema.sql` succeeds, run the entire [supabase/feature-pack.sql](./supabase/feature-pack.sql) script in a second SQL Editor query. This adds the database foundation for Ask requests, matches, ride requests and driver fare offers, service bids, private conversations/messages, call signalling sessions, language preferences and verification requests.
 
 If Supabase reports a permission error involving the `storage` schema or `storage.buckets`, stop and check that you are running the script as the project owner in the Supabase SQL Editor.
 
@@ -39,4 +39,4 @@ Use a test account and check each flow:
 - The app currently supports browsing, account registration/sign-in, publishing rental, job and service posts, and a My Posts dashboard where account owners can mark their posts unavailable, republish them, or delete them.
 - Rental photo upload is limited to image files up to 20 MB.
 - Do not call the app production-ready until the SQL setup has run and the tests above pass.
-- Moderation, reporting, richer profiles, and the complete Ask / Match / Agree interaction flow still need implementation and testing.
+- `feature-pack.sql` adds database tables and access policies; the corresponding complete app screens and workflows still need to be connected and tested.\n- Voice recognition depends on browser support and microphone permission.\n- Video calls need a WebRTC client and live signalling/realtime configuration; the database table alone does not provide working calls.\n- Maps, live driver location, language switching/translations, verification review tools, notifications, moderation and reporting still need implementation and testing.\n- Do not treat this feature foundation as a production-ready marketplace or ride-hailing service.
