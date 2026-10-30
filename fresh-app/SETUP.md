@@ -37,6 +37,6 @@ Use a test account and check each flow:
 
 - This is the fresh PHOMAB build, isolated in this folder.
 - The app currently supports browsing, account registration/sign-in, and publishing rental, job and service posts.
-- Rental photo upload is limited to image files up to 5 MB.
+- Rental photo upload is limited to image files up to 20 MB.
 - Do not call the app production-ready until the SQL setup has run and the tests above pass.
 - Moderation, reporting, richer profiles, and the complete Ask / Match / Agree interaction flow still need implementation and testing.
