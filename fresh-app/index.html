@@ -71,8 +71,49 @@ function matchWords(text){return String(text||'').toLowerCase().normalize('NFD')
 function scoreMatch(ask,row,category){const askText=matchWords(ask.request_text+' '+(ask.location_text||''));const rowText=matchWords([row.title,row.name,row.area,row.location,row.company,row.property_type,row.service_category,row.description].filter(Boolean).join(' '));const unique=[...new Set(askText)],hits=unique.filter(w=>rowText.includes(w));let score=unique.length?Math.round(hits.length/unique.length*70):0;const loc=String(ask.location_text||'').toLowerCase().trim();const rowLoc=String(row.area||row.location||'').toLowerCase();if(loc&&rowLoc&&(rowLoc.includes(loc)||loc.includes(rowLoc)))score+=20;else if(loc&&rowLoc)score=Math.max(0,score-8);if(category==='rental'&&ask.budget_max&&Number(row.rent)>Number(ask.budget_max))score=Math.max(0,score-20);return {score:Math.min(99,score),reason:hits.length?('Shared details: '+hits.slice(0,4).join(', ')):'Related category; check details and location'};}
 
 async function saveMatch(button){button.disabled=true;const category=button.dataset.category,item=button.dataset.item,askId=button.dataset.ask;const key=category==='rental'?'listing_id':category==='job'?'job_id':'service_provider_id';const payload={ask_id:askId,[key]:item,match_score:Number(button.dataset.score),match_reason:button.dataset.reason};const {error}=await db.from('matches').insert(payload);button.disabled=false;if(error){button.textContent=error.code==='23505'?'Already saved':'Could not save';button.title=error.message;return;}button.textContent='Saved ✓';button.disabled=true;}
-async function findMatches(askId){const target=$('matches-'+askId);target.classList.remove('hidden');target.innerHTML='<p class="meta">Finding relevant options…</p>';const {data:asks,error:askError}=await db.from('asks').select('id,category,request_text,location_text,budget_max').eq('id',askId).eq('user_id',session.user.id).single();if(askError||!asks){target.innerHTML='<p class="meta">Could not load this request.</p>';return;}const view={rental:'public_listings',job:'public_jobs',service:'public_service_providers'}[asks.category];if(!view){target.innerHTML='<p class="meta">Ride matching will appear when driver offers are connected.</p>';return;}const {data,error}=await db.from(view).select('*').limit(100);if(error){target.innerHTML='<p class="meta">Matching is unavailable: '+esc(error.message)+'</p>';return;}const ranked=(data||[]).map(row=>({...row,...scoreMatch(asks,row,asks.category)})).sort((a,b)=>b.score-a.score).slice(0,8);if(!ranked.length){target.innerHTML='<p class="meta">No available options yet. Try again later.</p>';return;}target.innerHTML='<strong>Best matches for your request</strong>'+ranked.map(row=>{const title=row.title||row.name||'Opportunity';const place=row.area||row.location||'Location not listed';const details=asks.category==='rental'?[place,row.property_type,row.rent?'const out=$('myAsksList');if(!session){out.innerHTML='<p class="meta">Sign in to view your requests.</p>';return;}out.innerHTML='<p class="meta">Loading your requests…</p>';const {data,error}=await db.from('asks').select('id,category,request_text,location_text,status,created_at').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(30);if(error){out.innerHTML='<p class="meta">Could not load requests: '+esc(error.message)+'. Run the feature-pack SQL migration if it has not been applied.</p>';return;}out.innerHTML=data.length?data.map(a=>'<article class="feature-item"><strong>'+esc(a.category.toUpperCase())+' · '+esc(a.status)+'</strong><span>'+esc(a.request_text)+'</span><div class="meta">'+esc(a.location_text||'Location not specified')+' · '+new Date(a.created_at).toLocaleDateString()+'</div><div class="actions"><button type="button" class="soft findMatches" data-ask="'+esc(a.id)+'">Find my matches</button></div><div class="match-results hidden" id="matches-'+esc(a.id)+'"></div></article>').join(''):'<p class="meta">You have not submitted any requests yet.</p>';out.querySelectorAll('.findMatches').forEach(btn=>btn.onclick=()=>findMatches(btn.dataset.ask));}
-\ndb.auth.onAuthStateChange((_event,s)=>{session=s;authUI();});refreshSession();
+
+async function saveMatch(button){
+ const category=button.dataset.category,item=button.dataset.item,askId=button.dataset.ask;
+ const key=category==='rental'?'listing_id':category==='job'?'job_id':'service_provider_id';
+ button.disabled=true;
+ const {error}=await db.from('matches').insert({ask_id:askId,[key]:item,match_score:Number(button.dataset.score),match_reason:button.dataset.reason});
+ if(error){button.textContent=error.code==='23505'?'Already saved':'Could not save';button.title=error.message;button.disabled=false;return;}
+ button.textContent='Saved ✓';
+}
+async function findMatches(askId){
+ const target=$('matches-'+askId);if(!target||!session)return;
+ target.classList.remove('hidden');target.innerHTML='<p class="meta">Finding relevant options…</p>';
+ const {data:ask,error:askError}=await db.from('asks').select('id,category,request_text,location_text,budget_max').eq('id',askId).eq('user_id',session.user.id).single();
+ if(askError||!ask){target.innerHTML='<p class="meta">Could not load this request.</p>';return;}
+ if(ask.category==='ride'){
+  const {data:rides,error}=await db.from('ride_requests').select('id,pickup_text,destination_text,proposed_fare,vehicle_type,status').eq('passenger_id',session.user.id).eq('status','open').order('created_at',{ascending:false}).limit(10);
+  if(error){target.innerHTML='<p class="meta">Ride requests unavailable: '+esc(error.message)+'</p>';return;}
+  target.innerHTML='<strong>Your open ride requests</strong>'+((rides||[]).map(x=>'<article class="match-card"><strong>'+esc(x.pickup_text)+' → '+esc(x.destination_text)+'</strong><p>Passenger fare: $'+esc(x.proposed_fare)+' · '+esc(x.vehicle_type)+'</p><p class="meta">Driver offers appear in AGREE.</p></article>').join('')||'<p class="meta">No open ride request is linked to this Ask. Use Request a ride to create one.</p>');
+  return;
+ }
+ const view={rental:'public_listings',job:'public_jobs',service:'public_service_providers'}[ask.category];
+ const {data,error}=await db.from(view).select('*').limit(100);
+ if(error){target.innerHTML='<p class="meta">Matching unavailable: '+esc(error.message)+'</p>';return;}
+ const ranked=(data||[]).map(row=>({...row,...scoreMatch(ask,row,ask.category)})).sort((a,b)=>b.score-a.score).slice(0,8);
+ if(!ranked.length){target.innerHTML='<p class="meta">No available options yet. Try again later.</p>';return;}
+ target.innerHTML='<strong>Best matches for your request</strong>'+ranked.map(row=>{
+  const title=row.title||row.name||'Opportunity',place=row.area||row.location||'Location not listed';
+  const details=ask.category==='rental'?[place,row.property_type,row.rent?'$'+row.rent+' / month':'']:ask.category==='job'?[row.company,place,row.employment_type]:[row.service_category,place];
+  const phone=row.phone||row.contact_phone||'',num=safePhone(phone);
+  return '<article class="match-card"><span class="match-score">'+row.score+'% relevance</span><strong>'+esc(title)+'</strong><p>'+esc(details.filter(Boolean).join(' · '))+'</p><p>'+esc(row.description||'')+'</p><p>'+esc(row.reason)+'</p><div class="actions"><button type="button" class="soft saveMatch" data-ask="'+esc(ask.id)+'" data-item="'+esc(row.id)+'" data-category="'+esc(ask.category)+'" data-score="'+row.score+'" data-reason="'+esc(row.reason)+'">Save match</button>'+(phone?'<a href="tel:'+esc(num)+'">Call</a>':'')+(phone&&row.whatsapp_enabled&&num?'<a target="_blank" rel="noopener" href="https://wa.me/'+esc(num)+'">WhatsApp</a>':'')+(ask.category==='service'?'<button type="button" class="soft makeServiceOffer" data-service="'+esc(row.id)+'">Make an offer</button>':'')+'</div></article>';
+ }).join('');
+ target.querySelectorAll('.saveMatch').forEach(b=>b.onclick=()=>saveMatch(b));
+ target.querySelectorAll('.makeServiceOffer').forEach(b=>b.onclick=()=>{$('serviceListingId').value=b.dataset.service;$('serviceOfferAmount').focus();$('serviceOfferStatus').textContent='Service selected. Enter your offer above.';});
+}
+async function loadMyAsks(){
+ const out=$('myAsksList');if(!session){out.innerHTML='<p class="meta">Sign in to view your requests.</p>';return;}
+ out.innerHTML='<p class="meta">Loading your requests…</p>';
+ const {data,error}=await db.from('asks').select('id,category,request_text,location_text,status,created_at').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(30);
+ if(error){out.innerHTML='<p class="meta">Could not load requests: '+esc(error.message)+'</p>';return;}
+ out.innerHTML=(data||[]).length?(data||[]).map(a=>'<article class="feature-item"><strong>'+esc(a.category.toUpperCase())+' · '+esc(a.status)+'</strong><span>'+esc(a.request_text)+'</span><div class="meta">'+esc(a.location_text||'Location not specified')+' · '+new Date(a.created_at).toLocaleDateString()+'</div><div class="actions"><button type="button" class="soft findMatches" data-ask="'+esc(a.id)+'">Find my matches</button></div><div class="match-results hidden" id="matches-'+esc(a.id)+'"></div></article>').join(''):'<p class="meta">You have not submitted any requests yet.</p>';
+ out.querySelectorAll('.findMatches').forEach(btn=>btn.onclick=()=>findMatches(btn.dataset.ask));
+}
+db.auth.onAuthStateChange((_event,s)=>{session=s;authUI();});refreshSession();
 </script>
 <script>
 (()=> {
